@@ -1,0 +1,374 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
+local CoreGui = game:GetService("CoreGui")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Variables
+local flying = false
+local noclipping = false
+local speedValue = 16
+local spookySound = nil
+local spookyId = 160442087  -- Spooky Scary Skeletons ID
+local decalSpamming = false
+local spamConnection = nil
+local skyboxChanged = false
+local antiLeaveEnabled = false
+local antiLeaveConnection = nil
+local gameId = game.PlaceId  -- For auto-rejoin
+
+-- Create Sound
+local function createSpookySound()
+    if spookySound then spookySound:Destroy() end
+    spookySound = Instance.new("Sound")
+    spookySound.Name = "SpookySkeleton"
+    spookySound.SoundId = "rbxassetid://" 100828050594137 spookyId
+    spookySound.Volume = 0.5
+    spookySound.Looped = true
+    spookySound.Parent = SoundService
+end
+
+-- Fly Function
+local function toggleFly()
+    flying = not flying
+    if flying then
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(4000, 4000, 4000)
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.Parent = rootPart
+        
+        local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+        bodyAngularVelocity.MaxTorque = Vector3.new(4000, 4000, 4000)
+        bodyAngularVelocity.AngularVelocity = Vector3.new(0, 0, 0)
+        bodyAngularVelocity.Parent = rootPart
+        
+        RunService.Heartbeat:Connect(function()
+            if flying and rootPart then
+                local cam = workspace.CurrentCamera
+                local vel = bodyVelocity
+                vel.Velocity = (cam.CFrame.LookVector * (UserInputService:IsKeyDown(Enum.KeyCode.W) and 50 or 0)) +
+                               (cam.CFrame.LookVector * (UserInputService:IsKeyDown(Enum.KeyCode.S) and -50 or 0)) +
+                               (cam.CFrame.RightVector * (UserInputService:IsKeyDown(Enum.KeyCode.D) and 50 or 0)) +
+                               (cam.CFrame.RightVector * (UserInputService:IsKeyDown(Enum.KeyCode.A) and -50 or 0)) +
+                               (Vector3.new(0, UserInputService:IsKeyDown(Enum.KeyCode.Space) and 50 or 0, 0)) +
+                               (Vector3.new(0, UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and -50 or 0, 0))
+            end
+        end)
+    else
+        if rootPart:FindFirstChild("BodyVelocity") then rootPart.BodyVelocity:Destroy() end
+        if rootPart:FindFirstChild("BodyAngularVelocity") then rootPart.BodyAngularVelocity:Destroy() end
+    end
+end
+
+-- Noclip Function
+local function toggleNoclip()
+    noclipping = not noclipping
+    if noclipping then
+        RunService.Stepped:Connect(function()
+            if noclipping and character then
+                for _, part in pairs(character:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- Speed Function
+local function setSpeed()
+    humanoid.WalkSpeed = speedValue
+end
+
+-- Decal Spam Function
+local function toggleDecalSpam()
+    decalSpamming = not decalSpamming
+    if decalSpamming then
+        spamConnection = RunService.Heartbeat:Connect(function()
+            if rootPart then
+                local spamPart = Instance.new("Part")
+                spamPart.Size = Vector3.new(1, 1, 1)
+                spamPart.Position = rootPart.Position + Vector3.new(math.random(-10,10), math.random(-5,5), math.random(-10,10))
+                spamPart.Anchored = false
+                spamPart.CanCollide = false
+                spamPart.BrickColor = BrickColor.Random()
+                spamPart.Parent = workspace
+                
+                local decal = Instance.new("Decal")
+                decal.Texture = "rbxassetid://603106241"  -- Skull meme decal
+                decal.Face = Enum.NormalId.Front
+                decal.Parent = spamPart
+            end
+        end)
+    else
+        if spamConnection then
+            spamConnection:Disconnect()
+            spamConnection = nil
+        end
+    end
+end
+
+-- Skybox Changer Function
+local function toggleSkybox()
+    skyboxChanged = not skyboxChanged
+    if skyboxChanged then
+        if Lighting:FindFirstChild("Sky") then
+            Lighting.Sky:Destroy()
+        end
+        local sky = Instance.new("Sky")
+        sky.SkyboxBk = "rbxassetid://60083180"  -- Nebula photo-like
+        sky.SkyboxDn = "rbxassetid://60083180"
+        sky.SkyboxFt = "rbxassetid://60083180"
+        sky.SkyboxLf = "rbxassetid://60083180"
+        sky.SkyboxRt = "rbxassetid://60083180"
+        sky.SkyboxUp = "rbxassetid://60083180"
+        sky.StarCount = 3000
+        sky.SunAngularSize = 10
+        sky.Parent = Lighting
+    else
+        if Lighting:FindFirstChild("Sky") then
+            Lighting.Sky:Destroy()
+        end
+    end
+end
+
+-- Kick Player Function
+local function kickPlayer()
+    local targetName = kickBox.Text
+    local targetPlayer = Players:FindFirstChild(targetName)
+    if targetPlayer then
+        targetPlayer:Kick("bodohimum8 kicked you! 🦴")
+        print("Kicked " .. targetName .. " (if server allows)")
+    else
+        player:Kick("Player not found: " .. targetName)
+    end
+end
+
+-- Jumpscare Function
+local function jumpscare()
+    local screamSound = Instance.new("Sound")
+    screamSound.SoundId = "rbxassetid://131961136"  -- Scream ID
+    screamSound.Volume = 1
+    screamSound.Parent = SoundService
+    screamSound:Play()
+    screamSound.Ended:Connect(function() screamSound:Destroy() end)
+    
+    local flashGui = Instance.new("ScreenGui")
+    flashGui.Parent = player.PlayerGui
+    local flashFrame = Instance.new("Frame")
+    flashFrame.Size = UDim2.new(1, 0, 1, 0)
+    flashFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    flashFrame.Parent = flashGui
+    local flashTween = TweenService:Create(flashFrame, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {BackgroundTransparency = 1})
+    flashTween:Play()
+    flashTween.Completed:Connect(function() flashGui:Destroy() end)
+    
+    local scaryPart = Instance.new("Part")
+    scaryPart.Size = Vector3.new(10, 10, 0.1)
+    scaryPart.Position = workspace.CurrentCamera.CFrame.Position + workspace.CurrentCamera.CFrame.LookVector * 5
+    scaryPart.Anchored = true
+    scaryPart.CanCollide = false
+    scaryPart.Parent = workspace
+    local scaryDecal = Instance.new("Decal")
+    scaryDecal.Texture = "rbxassetid://603106241"  -- Scary skull
+    scaryDecal.Face = Enum.NormalId.Front
+    scaryDecal.Parent = scaryPart
+    wait(2)
+    scaryPart:Destroy()
+end
+
+-- Anti-Leave Function (with Head Admin Alert)
+local function toggleAntiLeave()
+    antiLeaveEnabled = not antiLeaveEnabled
+    if antiLeaveEnabled then
+        local antiLeaveGui = Instance.new("ScreenGui")
+        antiLeaveGui.Name = "AntiLeaveOverlay"
+        antiLeaveGui.Parent = CoreGui
+        
+        local overlayFrame = Instance.new("Frame")
+        overlayFrame.Size = UDim2.new(1, 0, 1, 0)
+        overlayFrame.BackgroundTransparency = 1
+        overlayFrame.Parent = antiLeaveGui
+        
+        antiLeaveConnection = UserInputService.InputBegan:Connect(function(input)
+            if input.KeyCode == Enum.KeyCode.Escape and antiLeaveEnabled then
+                input.Changed:Connect(function() input.UserInputState = Enum.UserInputState.Cancel end)
+                
+                -- Head Admin Alert Popup
+                local warnGui = Instance.new("ScreenGui")
+                warnGui.Parent = player.PlayerGui
+                local warnFrame = Instance.new("Frame")
+                warnFrame.Size = UDim2.new(0, 400, 0, 150)
+                warnFrame.Position = UDim2.new(0.5, -200, 0.5, -75)
+                warnFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                warnFrame.BorderSizePixel = 2
+                warnFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+                warnFrame.Parent = warnGui
+                
+                local warnTitle = Instance.new("TextLabel")
+                warnTitle.Size = UDim2.new(1, 0, 0, 30)
+                warnTitle.BackgroundTransparency = 1
+                warnTitle.Text = "From Head Admin:"
+                warnTitle.TextColor3 = Color3.fromRGB(255, 0, 0)
+                warnTitle.TextScaled = true
+                warnTitle.Font = Enum.Font.GothamBold
+                warnTitle.Parent = warnFrame
+                
+                local warnLabel = Instance.new("TextLabel")
+                warnLabel.Size = UDim2.new(1, 0, 0, 120)
+                warnLabel.Position = UDim2.new(0, 0, 0, 30)
+                warnLabel.BackgroundTransparency = 1
+                warnLabel.Text = "YOU CANT LEAVE SHEESH! Stay for the chaos~ 🦴"
+                warnLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                warnLabel.TextScaled = true
+                warnLabel.Font = Enum.Font.GothamBold
+                warnLabel.Parent = warnFrame
+                
+                wait(3)
+                warnGui:Destroy()
+            end
+        end)
+        
+        player.Chatted:Connect(function(msg)
+            if msg:lower() == "/rejoin" then
+                TeleportService:Teleport(gameId, player)
+            end
+        end)
+        
+        print("Anti-Leave enabled! Head Admin alert ready.")
+    else
+        if antiLeaveConnection then
+            antiLeaveConnection:Disconnect()
+            antiLeaveConnection = nil
+        end
+        local overlay = CoreGui:FindFirstChild("AntiLeaveOverlay")
+        if overlay then overlay:Destroy() end
+    end
+end
+
+-- New: Destroy Baseplate Function
+local function destroyBaseplate()
+    local baseplate = Workspace:FindFirstChild("Baseplate") or Workspace:FindFirstChild("BasePlate") or Workspace:FindFirstChildWhichIsA("BasePart", true)  -- Fallback to any base-like part
+    if baseplate then
+        baseplate:Destroy()
+        print("Baseplate destroyed! Falling into void~")
+    else
+        print("No baseplate found!")
+    end
+end
+
+-- Close GUI Function
+local function closeGui()
+    if screenGui then
+        screenGui:Destroy()
+        -- Stop processes
+        if flying then toggleFly() end
+        if noclipping then toggleNoclip() end
+        if decalSpamming then toggleDecalSpam() end
+        if spookySound and spookySound.IsPlaying then spookySound:Stop() end
+        if skyboxChanged then toggleSkybox() end
+        if antiLeaveEnabled then toggleAntiLeave() end
+    end
+end
+
+-- GUI Creation
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "bodohimum8"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 530)  -- Enlarged for new button
+mainFrame.Position = UDim2.new(0.5, -150, 0.5, -265)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "bodohimum8 GUI (Ultimate Chaos!)"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
+
+-- Fly Button
+local flyBtn = Instance.new("TextButton")
+flyBtn.Size = UDim2.new(0.8, 0, 0, 30)
+flyBtn.Position = UDim2.new(0.1, 0, 0, 50)
+flyBtn.BackgroundColor3 = Color3.fromRGB(0, 162, 255)
+flyBtn.Text = "Toggle Fly (WASD + Space/Shift)"
+flyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+flyBtn.TextScaled = true
+flyBtn.Font = Enum.Font.Gotham
+flyBtn.Parent = mainFrame
+local flyCorner = Instance.new("UICorner")
+flyCorner.CornerRadius = UDim.new(0, 5)
+flyCorner.Parent = flyBtn
+flyBtn.MouseButton1Click:Connect(toggleFly)
+
+-- Noclip Button
+local noclipBtn = Instance.new("TextButton")
+noclipBtn.Size = UDim2.new(0.8, 0, 0, 30)
+noclipBtn.Position = UDim2.new(0.1, 0, 0, 90)
+noclipBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+noclipBtn.Text = "Toggle Noclip"
+noclipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+noclipBtn.TextScaled = true
+noclipBtn.Font = Enum.Font.Gotham
+noclipBtn.Parent = mainFrame
+local noclipCorner = Instance.new("UICorner")
+noclipCorner.CornerRadius = UDim.new(0, 5)
+noclipCorner.Parent = noclipBtn
+noclipBtn.MouseButton1Click:Connect(toggleNoclip)
+
+-- Speed Section
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0.8, 0, 0, 20)
+speedLabel.Position = UDim2.new(0.1, 0, 0, 130)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "Speed: 16"
+speedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedLabel.TextScaled = true
+speedLabel.Font = Enum.Font.Gotham
+speedLabel.Parent = mainFrame
+
+local speedBox = Instance.new("TextBox")
+speedBox.Size = UDim2.new(0.8, 0, 0, 30)
+speedBox.Position = UDim2.new(0.1, 0, 0, 150)
+speedBox.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+speedBox.Text = "16"
+speedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedBox.TextScaled = true
+speedBox.Font = Enum.Font.Gotham
+speedBox.Parent = mainFrame
+local speedCorner = Instance.new("UICorner")
+speedCorner.CornerRadius = UDim.new(0, 5)
+speedCorner.Parent = speedBox
+speedBox.FocusLost:Connect(function()
+    speedValue = tonumber(speedBox.Text) or 16
+    speedLabel.Text = "Speed: " .. speedValue
+    setSpeed()
+end)
+setSpeed()
+
+-- Spooky Music Button
+local spookyBtn = Instance.new("TextButton")
+spookyBtn.Size = UDim2.new(0.8, 0, 0, 30)
+spookyBtn.Position = UDim2.new(0.1, 0, 0, 190)
+spookyBtn.BackgroundColor3 = Color3.fromRGB(139, 0, 139
